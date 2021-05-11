@@ -29,6 +29,10 @@ export ARTIFACTS_DIR=${ARTIFACT_DIR:-"/tmp/artifacts-che"}
 export TESTS_STATUS=()
 export TEST_RESULT="PASSED"
 
+  # turn off telemetry
+  mkdir -p ${HOME}/.config/chectl
+  echo "{\"segment.telemetry\":\"off\"}" > ${HOME}/.config/chectl/config.json
+
 
 provisionOpenShiftOAuthUser() {
   htpasswd -c -B -b users.htpasswd user user
@@ -48,27 +52,11 @@ provisionOpenShiftOAuthUser() {
 }
 
 createCustomResourcesFile() {
-#   cat > custom-resources.yaml <<-END
-# spec:
-#   auth:
-#     updateAdminPassword: false
-#   server:
-#     customCheProperties:
-#       CHE_LIMITS_USER_WORKSPACES_RUN_COUNT: '-1'
-#       CHE_LIMITS_WORKSPACE_IDLE_TIMEOUT: '900000'
-#       CHE_INFRA_KUBERNETES_WORKSPACE__UNRECOVERABLE__EVENTS: 'Failed Scheduling,Failed to pull image'
-#       CHE_WORKSPACE_SIDECAR_IMAGE__PULL__POLICY: IfNotPresent
-#       CHE_WORKSPACE_PLUGIN__BROKER_PULL__POLICY: IfNotPresent
-#       CHE_INFRA_KUBERNETES_PVC_JOBS_IMAGE_PULL__POLICY: IfNotPresent
-# END
-
   cat > custom-resources.yaml <<-END
 spec:
   auth:
     updateAdminPassword: false
   server:
-    pluginRegistryImage: ${PLUGIN_REGISTRY_IMAGE}
-    pluginRegistryPullPolicy: IfNotPresent
     customCheProperties:
       CHE_LIMITS_USER_WORKSPACES_RUN_COUNT: '-1'
       CHE_LIMITS_WORKSPACE_IDLE_TIMEOUT: '900000'
@@ -78,12 +66,28 @@ spec:
       CHE_INFRA_KUBERNETES_PVC_JOBS_IMAGE_PULL__POLICY: IfNotPresent
 END
 
+#   cat > custom-resources.yaml <<-END
+# spec:
+#   auth:
+#     updateAdminPassword: false
+#   server:
+#     pluginRegistryImage: ${PLUGIN_REGISTRY_IMAGE}
+#     pluginRegistryPullPolicy: IfNotPresent
+#     customCheProperties:
+#       CHE_LIMITS_USER_WORKSPACES_RUN_COUNT: '-1'
+#       CHE_LIMITS_WORKSPACE_IDLE_TIMEOUT: '900000'
+#       CHE_INFRA_KUBERNETES_WORKSPACE__UNRECOVERABLE__EVENTS: 'Failed Scheduling,Failed to pull image'
+#       CHE_WORKSPACE_SIDECAR_IMAGE__PULL__POLICY: IfNotPresent
+#       CHE_WORKSPACE_PLUGIN__BROKER_PULL__POLICY: IfNotPresent
+#       CHE_INFRA_KUBERNETES_PVC_JOBS_IMAGE_PULL__POLICY: IfNotPresent
+# END
+
   echo "Generated custom resources file"
   cat custom-resources.yaml
 }
 
 deployChe() {
-  chectl server:deploy --che-operator-cr-patch-yaml=custom-resources.yaml --telemetry=off --platform=openshift --installer=operator --batch
+  chectl server:deploy --che-operator-cr-patch-yaml=custom-resources.yaml --platform=openshift --installer=operator --batch
 }
 
 patchTestPodConfig(){
@@ -173,17 +177,17 @@ cleanUpAfterTest(){
   oc delete pod -n "${TEST_POD_NAMESPACE}" "${TEST_POD_NAME}"
 
   # get token
-  # chectl auth:login -n eclipse-che
+  chectl auth:login -n eclipse-che
 
-  # # get workspace ID
-  # WORKSPACE_ID=$(chectl workspace:list -n eclipse-che | grep "${TEST_POD_NAME}" | awk '{print $1}')
-  # echo "Workspace ID: ${WORKSPACE_ID}"
+  # get workspace ID
+  WORKSPACE_ID=$(chectl workspace:list -n eclipse-che | grep "${TEST_POD_NAME}" | awk '{print $1}')
+  echo "Workspace ID: ${WORKSPACE_ID}"
 
-  # # stop workspace
-  # chectl workspace:stop -n eclipse-che "${WORKSPACE_ID}"
+  # stop workspace
+  chectl workspace:stop -n eclipse-che "${WORKSPACE_ID}"
 
-  # # delete workspace
-  # chectl workspace:delete -n eclipse-che "${WORKSPACE_ID}"
+  # delete workspace
+  chectl workspace:delete -n eclipse-che "${WORKSPACE_ID}"
 }
 
 runTest() {
@@ -216,16 +220,16 @@ runTest() {
 }
 
 runTests() {
-  oc create namespace $TEST_POD_NAMESPACE
+  # oc create namespace $TEST_POD_NAMESPACE
 
   runTest "JavaPlugin" "java11-plugin-test"
   runTest "PythonPlugin" "python-plugin-test"
 
 }
 
-provisionOpenShiftOAuthUser
-createCustomResourcesFile
-deployChe
+# provisionOpenShiftOAuthUser
+# createCustomResourcesFile
+# deployChe
 # patchTestPodConfig
 # 
 runTests
